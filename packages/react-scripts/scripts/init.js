@@ -89,7 +89,7 @@ module.exports = function (
   templateName
 ) {
   const appPackage = require(path.join(appPath, 'package.json'));
-  const useYarn = fs.existsSync(path.join(appPath, 'yarn.lock'));
+  const useYarn = fs.existsSync(path.join(appPath, 'yarn.lock')) || process.env.WORKSPACE_ROOT_PATH;
 
   if (!templateName) {
     console.log('');
@@ -178,7 +178,7 @@ module.exports = function (
   });
 
   // Copy over some of the devDependencies
-  appPackage.dependencies = appPackage.dependencies || {};
+  appPackage.dependencies = process.env && process.env.WORKSPACE_ROOT_PATH ? templatePackage.dependencies : appPackage.dependencies || {};
 
   // Setup the script rules
   const templateScripts = templatePackage.scripts || {};
@@ -317,15 +317,25 @@ module.exports = function (
     args = args.concat(['react', 'react-dom']);
   }
 
-  // Install template dependencies, and react and react-dom if missing.
-  if ((!isReactInstalled(appPackage) || templateName) && args.length > 1) {
-    console.log();
-    console.log(`Installing template dependencies using ${command}...`);
-
-    const proc = spawn.sync(command, args, { stdio: 'inherit' });
+  const workspaceRoot = process.env && process.env.WORKSPACE_ROOT_PATH ? path.join(originalDirectory, process.env.WORKSPACE_ROOT_PATH) : null;
+  if (workspaceRoot) {
+    console.log(`Installing template dependencies using ${command} for yarn workspace, ${workspaceRoot}...`);
+    const proc = spawn.sync('yarnpkg', ['install'], { stdio: 'inherit', cwd: workspaceRoot });
     if (proc.status !== 0) {
       console.error(`\`${command} ${args.join(' ')}\` failed`);
       return;
+    }
+  } else {
+    // Install template dependencies, and react and react-dom if missing.
+    if ((!isReactInstalled(appPackage) || templateName) && args.length > 1) {
+      console.log();
+      console.log(`Installing template dependencies using ${command}...`);
+
+      const proc = spawn.sync(command, args, { stdio: 'inherit' });
+      if (proc.status !== 0) {
+        console.error(`\`${command} ${args.join(' ')}\` failed`);
+        return;
+      }
     }
   }
 
